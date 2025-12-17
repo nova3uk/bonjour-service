@@ -14,6 +14,13 @@ export class Registry {
 
     private server      : Server
     private services    : Array<Service> = []
+    
+    /**
+     * Track FQDNs that we have published (even after unpublish).
+     * This allows the probe to recognize our own previously-published names
+     * and not consider them as conflicts when re-publishing.
+     */
+    private ownedNames  : Set<string> = new Set()
 
     constructor(server: Server) {
         this.server = server
@@ -57,6 +64,10 @@ export class Registry {
         const service   = new Service(config)
         service.start   = start.bind(null, service, this)
         service.stop    = stop.bind(null, service, this)
+        
+        // Track this name as owned by us (persists even after unpublish)
+        this.ownedNames.add(service.fqdn)
+        
         service.start({ probe: config.probe !== false })
         return service
     }
@@ -79,8 +90,17 @@ export class Registry {
      * simultaneously on the network, wait a random amount of time (between
      * 0 and 250 ms) before probing.
      *
+     * IMPROVEMENT: If the name is in our ownedNames set (we previously published it),
+     * we skip conflict detection. This handles the common case of stop/start cycles
+     * where stale cached records might otherwise cause false conflicts.
      */
     private probe(mdns: any, service: Service, callback: CallableFunction) {
+        // If we previously published this name, skip probing entirely.
+        // This prevents false conflicts from stale cached records after stop/start cycles.
+        if (this.ownedNames.has(service.fqdn)) {
+            return process.nextTick(() => callback(false))
+        }
+        
         var sent    : boolean   = false
         var retries : number    = 0
         var timer   : any

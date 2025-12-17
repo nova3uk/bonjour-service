@@ -6,6 +6,7 @@ export interface PublishOptions {
 export declare class Registry {
     private server;
     private services;
+    private ownedNames;
     constructor(server: Server);
     publish(config: ServiceConfig, options?: PublishOptions): Service;
     unpublishAll(callback: CallableFunction | undefined): void;

@@ -12,6 +12,7 @@ const noop = function () { };
 class Registry {
     constructor(server) {
         this.services = [];
+        this.ownedNames = new Set();
         this.server = server;
     }
     publish(config, options) {
@@ -52,6 +53,7 @@ class Registry {
         const service = new service_1.default(config);
         service.start = start.bind(null, service, this);
         service.stop = stop.bind(null, service, this);
+        this.ownedNames.add(service.fqdn);
         service.start({ probe: config.probe !== false });
         return service;
     }
@@ -63,6 +65,9 @@ class Registry {
         this.services.map(service => service.destroyed = true);
     }
     probe(mdns, service, callback) {
+        if (this.ownedNames.has(service.fqdn)) {
+            return process.nextTick(() => callback(false));
+        }
         var sent = false;
         var retries = 0;
         var timer;

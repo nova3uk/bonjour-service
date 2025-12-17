@@ -167,6 +167,9 @@ export class Registry {
      * Besides removing a service from the mDNS registry, a "goodbye"
      * message is sent for each service to let the network know about the
      * shutdown.
+     * 
+     * Per RFC 6762, goodbye packets should be sent multiple times to ensure
+     * reliable delivery over multicast UDP (which is inherently unreliable).
      */
     private teardown (server: Server, services: Array<Service> | Service, callback: any) {
         if (!Array.isArray(services)) services = [services]
@@ -185,15 +188,31 @@ export class Registry {
         if (records.length === 0) return callback && process.nextTick(callback)
         server.unregister(records)
     
-        // send goodbye message
-        server.mdns.respond(records, function () {
-            (services as Array<Service>).forEach(function (service) {
-                service.published = false
+        // Send goodbye message multiple times for reliability
+        // Multicast UDP is unreliable - sending 3 times with 250ms intervals
+        // greatly improves the chance that clients receive the goodbye
+        const GOODBYE_COUNT = 3
+        const GOODBYE_INTERVAL_MS = 250
+        let sentCount = 0
+
+        const sendGoodbye = () => {
+            server.mdns.respond(records, () => {
+                sentCount++
+                if (sentCount < GOODBYE_COUNT) {
+                    // Send additional goodbye packets
+                    setTimeout(sendGoodbye, GOODBYE_INTERVAL_MS)
+                } else {
+                    // All goodbye packets sent, now invoke callback
+                    (services as Array<Service>).forEach(function (service) {
+                        service.published = false
+                    })
+                    if (typeof callback === "function") {
+                        callback.apply(null, arguments)
+                    }
+                }
             })
-            if (typeof callback === "function") {
-                callback.apply(null, arguments)
-            }
-        })
+        }
+        sendGoodbye()
     }
 }
 

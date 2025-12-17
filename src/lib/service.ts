@@ -121,12 +121,16 @@ export class Service extends EventEmitter {
      * Provide PTR record
      * @param service
      * @returns
+     * 
+     * Note: Default TTL changed from 28800 (8 hours) to 4500 (75 minutes)
+     * per RFC 6762 recommendations. The original 8-hour TTL caused services
+     * to remain cached far too long after goodbye packets were lost.
      */
     private RecordPTR(service: Service): ServiceRecord {
         return {
             name    : `${service.type}${TLD}`,
             type    : 'PTR',
-            ttl     : service.ttl ?? 28800,
+            ttl     : service.ttl ?? 4500,
             data    : service.fqdn
         }
     }
@@ -141,7 +145,7 @@ export class Service extends EventEmitter {
         return {
             name: `_${subtype}._sub.${service.type}${TLD}`,
             type: 'PTR',
-            ttl: service.ttl ?? 28800,
+            ttl: service.ttl ?? 4500,
             data: `${service.name}.${service.type}${TLD}`
         }
     }
